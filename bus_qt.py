@@ -10,7 +10,7 @@ from datetime import datetime, timedelta
 INSTALL_DIR = '/home/marek/python_apps/bus_statedtl'
 CONFIG_PATH = sys.argv[1] if len(sys.argv) > 1 else INSTALL_DIR + '/config.yaml'
 REFRESH_SECS = 60
-TICK_SECS = 15   # カウントダウン更新間隔（フリーズ相関テスト中）
+TICK_SECS = 30   # カウントダウン更新間隔
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)) or INSTALL_DIR)
 from bus_fetch import (
@@ -88,6 +88,7 @@ class BusCard(QFrame):
         self.setFrameStyle(QFrame.Box | QFrame.Plain)
         self.setLineWidth(2)
         self._secs = _remaining_secs(entry['arrival'], server_time)
+        self._urgency = -1   # 前回の緊急度レベル（変化時のみ再描画）
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(8, 6, 8, 6)
@@ -125,36 +126,47 @@ class BusCard(QFrame):
             self._secs = max(0, self._secs - TICK_SECS)
         self._update()
 
+    def _urgency_level(self, rem):
+        if rem is None:  return -1
+        if rem <= 0:     return 0
+        if rem < 60:     return 1
+        if rem < 120:    return 2
+        if rem < 300:    return 3
+        return 4
+
     def _update(self):
         rem = self._secs
         if rem is None:
             return
         m, s = divmod(max(0, rem), 60)
 
+        # テキスト更新（軽量・毎ティック）
         if rem <= 0:
             self._lbl_cd.setText('到着')
-            self._lbl_cd.setFont(QFont('sans-serif', 28, QFont.Bold))
-            self._lbl_cd.setVisible(True)
-            self._apply_style('QFrame{background:#000}QLabel{color:#fff}')
-        elif rem < 60:
-            self._lbl_cd.setText('%d分%02d秒' % (m, s))
-            self._lbl_cd.setFont(QFont('sans-serif', 26, QFont.Bold))
-            self._apply_style('QFrame{background:#000}QLabel{color:#fff}')
-        elif rem < 120:
-            self._lbl_cd.setText('%d分%02d秒' % (m, s))
-            self._lbl_cd.setFont(QFont('sans-serif', 22, QFont.Bold))
-            self._apply_style('QFrame{background:#444}QLabel{color:#fff}')
-        elif rem < 300:
-            self._lbl_cd.setText('%d分%02d秒' % (m, s))
-            self._lbl_cd.setFont(QFont('sans-serif', 20, QFont.Bold))
-            self._apply_style('')
         else:
             self._lbl_cd.setText('%d分%02d秒' % (m, s))
-            self._lbl_cd.setFont(QFont('sans-serif', 18))
-            self._apply_style('')
 
-    def _apply_style(self, style):
-        self.setStyleSheet(style)
+        # スタイル・フォント変更は緊急度が変わったときだけ（重い処理）
+        level = self._urgency_level(rem)
+        if level == self._urgency:
+            return
+        self._urgency = level
+
+        if level == 0:
+            self._lbl_cd.setFont(QFont('sans-serif', 28, QFont.Bold))
+            self.setStyleSheet('QFrame{background:#000}QLabel{color:#fff}')
+        elif level == 1:
+            self._lbl_cd.setFont(QFont('sans-serif', 26, QFont.Bold))
+            self.setStyleSheet('QFrame{background:#000}QLabel{color:#fff}')
+        elif level == 2:
+            self._lbl_cd.setFont(QFont('sans-serif', 22, QFont.Bold))
+            self.setStyleSheet('QFrame{background:#444}QLabel{color:#fff}')
+        elif level == 3:
+            self._lbl_cd.setFont(QFont('sans-serif', 20, QFont.Bold))
+            self.setStyleSheet('')
+        else:
+            self._lbl_cd.setFont(QFont('sans-serif', 18))
+            self.setStyleSheet('')
 
 
 class MainWindow(QWidget):
