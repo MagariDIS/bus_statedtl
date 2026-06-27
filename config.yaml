@@ -1,0 +1,13 @@
+pages:
+  - page: "藤の里住宅前"
+    routes:
+      - label: "近鉄八尾駅前行"
+        url: "https://kintetsu-bus.jorudan.biz/busstatedtl?mode=4&fr=%E8%97%A4%E3%81%AE%E9%87%8C%E4%BD%8F%E5%AE%85%E5%89%8D&frsk=B&tosk=&dt=YYYYMMDDHHMM&dgmpl=%E8%97%A4%E3%81%AE%E9%87%8C%E4%BD%8F%E5%AE%85%E5%89%8D%E3%80%94%E8%BF%91%E9%89%84%E3%83%90%E3%82%B9%E3%80%95%3A1%3A1&p=0%2C14%2C15"
+      - label: "藤井寺駅行"
+        url: "https://kintetsu-bus.jorudan.biz/busstatedtl?mode=4&fr=%E8%97%A4%E3%81%AE%E9%87%8C%E4%BD%8F%E5%AE%85%E5%89%8D&frsk=B&tosk=&dt=YYYYMMDDHHMM&dgmpl=%E8%97%A4%E3%81%AE%E9%87%8C%E4%BD%8F%E5%AE%85%E5%89%8D%E3%80%94%E8%BF%91%E9%89%84%E3%83%90%E3%82%B9%E3%80%95%3A2&p=0%2C14%2C15%2C16"
+  - page: "八尾→藤井寺"
+    routes:
+      - label: "八尾南駅前発"
+        url: "https://kintetsu-bus.jorudan.biz/busstatedtl?mode=4&fr=%E5%85%AB%E5%B0%BE%E5%8D%97%E9%A7%85%E5%89%8D&frsk=B&tosk=&dt=YYYYMMDDHHMM&dgmpl=%E5%85%AB%E5%B0%BE%E5%8D%97%E9%A7%85%E5%89%8D%E3%80%94%E8%BF%91%E9%89%84%E3%83%90%E3%82%B9%E3%80%95%3A3%3A1&p=0%2C14%2C15"
+      - label: "近鉄八尾駅前発"
+        url: "https://kintetsu-bus.jorudan.biz/busstatedtl?mode=4&fr=%E8%BF%91%E9%89%84%E5%85%AB%E5%B0%BE%E9%A7%85%E5%89%8D&frsk=B&tosk=&dt=YYYYMMDDHHMM&dgmpl=%E8%BF%91%E9%89%84%E5%85%AB%E5%B0%BE%E9%A7%85%E5%89%8D%E3%80%94%E8%BF%91%E9%89%84%E3%83%90%E3%82%B9%E3%80%95%3A4%3A1&p=0%2C14%2C15"
