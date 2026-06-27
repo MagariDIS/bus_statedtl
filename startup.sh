@@ -19,6 +19,10 @@ sleep 1
 $PYTHON "$DIR/bus_server.py" "$DIR/config.yaml" 8080 \
     </dev/null >/tmp/bus_server.log 2>&1 &
 
+# スクリーンセーバー・DPMS を無効化（自動スタンバイ防止）
+DISPLAY=:0.0 xset s off
+DISPLAY=:0.0 xset -dpms
+
 # Firefox を起動
 sleep 2
 DISPLAY=:0.0 firefox http://localhost:8080/ &
