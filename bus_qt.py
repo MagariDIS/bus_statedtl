@@ -4,11 +4,13 @@
 from __future__ import print_function
 import sys
 import os
+import re
 from datetime import datetime, timedelta
 
 INSTALL_DIR = '/home/marek/python_apps/bus_statedtl'
 CONFIG_PATH = sys.argv[1] if len(sys.argv) > 1 else INSTALL_DIR + '/config.yaml'
 REFRESH_SECS = 60
+TICK_SECS = 30   # カウントダウン更新間隔（毎秒更新はKoboに重すぎるため）
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)) or INSTALL_DIR)
 from bus_fetch import (
@@ -21,6 +23,26 @@ from PySide.QtGui import (
     QApplication, QWidget, QVBoxLayout, QHBoxLayout,
     QLabel, QPushButton, QFrame, QFont, QSizePolicy,
 )
+
+
+def _get_mem_info():
+    """プロセスと空きメモリを /proc から取得する（追加パッケージ不要）"""
+    try:
+        with open('/proc/self/status') as f:
+            proc = f.read()
+        with open('/proc/meminfo') as f:
+            minfo = f.read()
+        rss = re.search(r'VmRSS:\s+(\d+)', proc)
+        avail = re.search(r'MemAvailable:\s+(\d+)', minfo) or re.search(r'MemFree:\s+(\d+)', minfo)
+        total = re.search(r'MemTotal:\s+(\d+)', minfo)
+        parts = []
+        if rss:
+            parts.append('App:%dMB' % (int(rss.group(1)) // 1024))
+        if avail and total:
+            parts.append('Free:%d/%dMB' % (int(avail.group(1)) // 1024, int(total.group(1)) // 1024))
+        return ' | '.join(parts)
+    except Exception:
+        return ''
 
 
 def _remaining_secs(arrival_str, now):
@@ -100,13 +122,8 @@ class BusCard(QFrame):
 
     def tick(self):
         if self._secs is not None and self._secs > 0:
-            self._secs -= 1
+            self._secs = max(0, self._secs - TICK_SECS)
         self._update()
-
-    def set_blink(self, visible):
-        """1分未満のとき点滅させる"""
-        if self._secs is not None and self._secs < 60:
-            self._lbl_cd.setVisible(visible)
 
     def _update(self):
         rem = self._secs
@@ -146,7 +163,6 @@ class MainWindow(QWidget):
         self._pages = load_config(CONFIG_PATH)
         self._page_idx = 0
         self._cards = []
-        self._blink_on = True
         self._fetch_thread = None
 
         self._setup_ui()
@@ -184,9 +200,15 @@ class MainWindow(QWidget):
         sep.setLineWidth(3)
         self._root.addWidget(sep)
 
+        info_row = QHBoxLayout()
         self._lbl_time = QLabel('取得中...')
         self._lbl_time.setFont(QFont('sans-serif', 10))
-        self._root.addWidget(self._lbl_time)
+        self._lbl_mem = QLabel('')
+        self._lbl_mem.setFont(QFont('sans-serif', 10))
+        info_row.addWidget(self._lbl_time)
+        info_row.addStretch()
+        info_row.addWidget(self._lbl_mem)
+        self._root.addLayout(info_row)
 
         # コンテンツエリア（路線カラムを横並び）
         self._content_widget = QWidget()
@@ -199,15 +221,11 @@ class MainWindow(QWidget):
     def _setup_timers(self):
         self._tick_timer = QTimer(self)
         self._tick_timer.timeout.connect(self._tick)
-        self._tick_timer.start(1000)
+        self._tick_timer.start(TICK_SECS * 1000)
 
         self._refresh_timer = QTimer(self)
         self._refresh_timer.timeout.connect(self._fetch)
         self._refresh_timer.start(REFRESH_SECS * 1000)
-
-        self._blink_timer = QTimer(self)
-        self._blink_timer.timeout.connect(self._blink)
-        self._blink_timer.start(500)
 
     def _switch_page(self, idx):
         self._page_idx = idx
@@ -236,6 +254,7 @@ class MainWindow(QWidget):
 
     def _on_data(self, now, route_results):
         self._lbl_time.setText('取得: ' + now.strftime('%Y-%m-%d %H:%M'))
+        self._lbl_mem.setText(_get_mem_info())
         self._cards = []
 
         # コンテンツをクリア
@@ -273,11 +292,7 @@ class MainWindow(QWidget):
     def _tick(self):
         for card in self._cards:
             card.tick()
-
-    def _blink(self):
-        self._blink_on = not self._blink_on
-        for card in self._cards:
-            card.set_blink(self._blink_on)
+        self._lbl_mem.setText(_get_mem_info())
 
 
 def main():
