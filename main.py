@@ -11,6 +11,7 @@ SCRIPT_NAME = 'bus_fetch.py'
 SERVER_NAME = 'bus_server.py'
 CONFIG_NAME = 'config.yaml'
 SERVER_PORT = 8080
+STARTUP_NAME = 'startup.sh'
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
@@ -98,30 +99,28 @@ def main():
     local_script = os.path.join(BASE_DIR, SCRIPT_NAME)
     local_server = os.path.join(BASE_DIR, SERVER_NAME)
     local_config = os.path.join(BASE_DIR, CONFIG_NAME)
+    local_startup = os.path.join(BASE_DIR, STARTUP_NAME)
     remote_script = f'{REMOTE_DIR}/{SCRIPT_NAME}'
     remote_server = f'{REMOTE_DIR}/{SERVER_NAME}'
     remote_config = f'{REMOTE_DIR}/{CONFIG_NAME}'
+    remote_startup = f'{REMOTE_DIR}/{STARTUP_NAME}'
 
     print(f'接続先: {host_str}')
     ssh_run(host_str, f'mkdir -p {REMOTE_DIR}', env)
     scp_file(local_script, f'{host_str}:{remote_script}', env)
     scp_file(local_server, f'{host_str}:{remote_server}', env)
     scp_file(local_config, f'{host_str}:{remote_config}', env)
+    scp_file(local_startup, f'{host_str}:{remote_startup}', env)
+    ssh_run(host_str, f'chmod +x {remote_startup}', env)
 
-    python_cmd = detect_python(host_str, env)
-
-    # 既存のサーバープロセスを停止してから再起動
-    # nohup は Dropbear 環境で動作しないため </dev/null でデタッチ
+    # ~/.xinitrc に startup.sh を登録（X セッション起動時に自動実行・冪等）
     ssh_run(host_str,
-        f'pkill -f "{python_cmd} {remote_server}" 2>/dev/null;'
-        f' {python_cmd} {remote_server} {remote_config} {SERVER_PORT}'
-        f' </dev/null >/tmp/bus_server.log 2>&1 &',
+        f'grep -qF "{remote_startup}" ~/.xinitrc 2>/dev/null'
+        f' || echo "{remote_startup} &" >> ~/.xinitrc',
         env, check=False)
 
-    # Firefox で開く
-    ssh_run(host_str,
-        f'sleep 2 && DISPLAY=:0.0 firefox http://localhost:{SERVER_PORT}/ &',
-        env, check=False)
+    # startup.sh 経由でサーバー起動・Firefox 表示
+    ssh_run(host_str, f'bash {remote_startup}', env, check=False)
 
     print(f'サーバー起動済み → http://{host}:{SERVER_PORT}/')
     print('（60秒ごとに自動更新されます）')

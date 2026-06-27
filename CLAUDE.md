@@ -25,7 +25,8 @@ uv run python bus_fetch.py config.yaml       # ローカルテスト（HTML 出�
 このPC                               Kobo (/home/marek/python_apps/bus_statedtl/)
 ├── main.py          ─SSH/SCP→      ├── bus_fetch.py
 ├── bus_fetch.py     ─SCP→          ├── bus_server.py
-├── bus_server.py    ─SCP→          └── config.yaml
+├── bus_server.py    ─SCP→          ├── startup.sh  ← chmod +x / ~/.xinitrc 登録
+├── startup.sh       ─SCP→          └── config.yaml
 ├── config.yaml
 └── .env (接続情報・コミット禁止)
 ```
@@ -35,9 +36,16 @@ uv run python bus_fetch.py config.yaml       # ローカルテスト（HTML 出�
 ### `main.py`（PC 上で実行）
 - `.env` から `KOBO_IP` / `KOBO_ACCONT` / `KOBO_ACCONT_PASSWORD` を読み込む
 - `scp` + `SSH_ASKPASS` でパスワード認証（Dropbear 2014 対応のレガシーSSH鍵交換方式を使用）
-- `bus_fetch.py`・`bus_server.py`・`config.yaml` を Kobo の `/home/marek/python_apps/bus_statedtl/` へ転送
-- 既存サーバープロセスを `pkill` で停止してから `bus_server.py` をバックグラウンド再起動
-- `DISPLAY=:0.0 firefox http://localhost:8080/` で Kobo の Firefox を起動
+- `bus_fetch.py`・`bus_server.py`・`startup.sh`・`config.yaml` を Kobo の `/home/marek/python_apps/bus_statedtl/` へ転送
+- `startup.sh` を `chmod +x` して実行権を付与
+- `~/.xinitrc` に `startup.sh &` を追記（`grep` による冪等チェック付き）
+- `bash startup.sh` でサーバー起動・Firefox 表示
+
+### `startup.sh`（Kobo 上で実行・自動起動）
+- `command -v` で `python3` / `python` / `python2` を自動検出
+- 既存の `bus_server.py` プロセスと Firefox を `pkill` で終了（不要なタブを残さない）
+- `bus_server.py` をバックグラウンドで起動後、Firefox で `http://localhost:8080/` を開く
+- `~/.xinitrc` 経由で X セッション起動時に自動実行される
 
 ### `bus_fetch.py`（Kobo 上で実行）
 - Python 2/3 両対応（Ubuntu 13.04 は Python 2.7 が標準）

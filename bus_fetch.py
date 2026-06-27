@@ -175,6 +175,18 @@ def parse_bus_entries(text):
     return entries
 
 
+def _remaining_secs(arrival_str, now):
+    """到着時刻までの残り秒数を返す（翌日繰り越し対応）"""
+    try:
+        h, m = map(int, arrival_str.split(':'))
+        arrival = now.replace(hour=h, minute=m, second=0, microsecond=0)
+        if arrival < now:
+            arrival += timedelta(days=1)
+        return max(0, int((arrival - now).total_seconds()))
+    except Exception:
+        return None
+
+
 def generate_html(route_results, refresh_seconds=None, server_time=None,
                   page_labels=None, current_page=0):
     """Kobo グレースケール向けカード形式 HTML を生成する"""
@@ -216,6 +228,19 @@ def generate_html(route_results, refresh_seconds=None, server_time=None,
         '.arr{font-size:22px;font-weight:bold;margin:0 8px}',
         '.sta{font-size:16px;font-weight:bold}',
         '.row2{font-size:12px;padding-left:6px}',
+        # カウントダウン（グレースケール段階視認性）
+        '.cd{font-size:20px;font-weight:bold;margin:3px 0;text-align:center}',
+        '.urg3 .cd{font-size:22px}',
+        '.urg2{background:#444!important}',
+        '.urg2 .num,.urg2 .arr,.urg2 .sta,.urg2 .row2,.urg2 .cd{color:#fff}',
+        '.urg2 .cd{font-size:26px}',
+        '.urg1{background:#000!important}',
+        '.urg1 .num,.urg1 .arr,.urg1 .sta,.urg1 .row2,.urg1 .cd{color:#fff}',
+        '.urg1 .cd{font-size:30px;animation:blink .5s step-end infinite}',
+        '.urg0{background:#000!important}',
+        '.urg0 .num,.urg0 .arr,.urg0 .sta,.urg0 .row2,.urg0 .cd{color:#fff}',
+        '.urg0 .cd{font-size:30px}',
+        '@keyframes blink{50%{opacity:0}}',
         '</style>',
         '</head><body>',
         '<div class="hdr">',
@@ -239,21 +264,32 @@ def generate_html(route_results, refresh_seconds=None, server_time=None,
     for label, entries in route_results:
         parts.append('<div class="col">')
         parts.append('<h2>%s</h2>' % label)
+        now_dt = server_time or datetime.now()
         if entries:
             for i, e in enumerate(entries):
                 alt = ' alt' if i % 2 == 1 else ''
                 delay_text = ('! ' + e['delay']) if '遅れ' in e['delay'] else e['delay']
+                secs = _remaining_secs(e['arrival'], now_dt)
+                secs_attr = (' data-secs="%d"' % secs) if secs is not None else ''
+                if secs is not None:
+                    mm, ss = divmod(secs, 60)
+                    cd_text = '%d分%02d秒' % (mm, ss) if secs > 0 else '到着'
+                    cd_html = '<div class="cd">%s</div>' % cd_text
+                else:
+                    cd_html = ''
                 parts.append(
-                    '<div class="card%s">'
+                    '<div class="card%s"%s>'
                     '<div class="row1">'
                     '<span class="num">%s.</span>'
                     '<span class="arr">%s</span>'
                     '<span class="sta">%s</span>'
                     '</div>'
+                    '%s'
                     '<div class="row2">定刻&nbsp;%s&nbsp;(%s)</div>'
                     '</div>' % (
-                        alt,
+                        alt, secs_attr,
                         e['num'], e['arrival'], e['status'],
+                        cd_html,
                         e['scheduled'], delay_text,
                     )
                 )
@@ -262,6 +298,31 @@ def generate_html(route_results, refresh_seconds=None, server_time=None,
         parts.append('</div>')
     parts.append('</div>')
 
+    parts.append(
+        '<script>'
+        '(function(){'
+        'var t0=Date.now();'
+        'function pad(n){return n<10?"0"+n:n;}'
+        'function tick(){'
+        'var el=Math.floor((Date.now()-t0)/1000);'
+        'var cs=document.querySelectorAll("[data-secs]");'
+        'for(var i=0;i<cs.length;i++){'
+        'var c=cs[i],rem=parseInt(c.getAttribute("data-secs"))-el;'
+        'var cd=c.querySelector(".cd");'
+        'if(!cd)continue;'
+        'c.className=c.className.replace(/\\s*urg\\d/g,"");'
+        'if(rem<=0){cd.textContent="到着";c.className+=" urg0";}'
+        'else{'
+        'cd.textContent=Math.floor(rem/60)+"分"+pad(rem%60)+"秒";'
+        'if(rem<60)c.className+=" urg1";'
+        'else if(rem<120)c.className+=" urg2";'
+        'else if(rem<300)c.className+=" urg3";'
+        '}}'
+        '}'
+        'tick();setInterval(tick,1000);'
+        '})();'
+        '</script>'
+    )
     parts.append('</body></html>')
     return '\n'.join(parts)
 
