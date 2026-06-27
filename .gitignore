@@ -11,3 +11,6 @@ wheels/
 
 # 接続情報（コミット禁止）
 .env
+
+# 日本語版README（ローカル保管用）
+README_ja.md
