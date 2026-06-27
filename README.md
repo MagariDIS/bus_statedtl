@@ -1,72 +1,138 @@
-# 近鉄バス接近情報ビューア（Kobo タブレット向け）
+# Re-purposing your Kobo: Beyond a Web Browser
 
-## 目的
+If you are feeling disappointed by the performance of your Kobo when browsing the modern web, you are not alone. The current web ecosystem—with its heavy JavaScript, massive advertising scripts, and high memory requirements—often overwhelms the limited hardware of older devices.
 
-近鉄バスの接近情報サイトの到着予定を、TLS 証明書を検証できない古いブラウザしか持たない Ubuntu 13.04 Kobo タブレット上で表示するためのツール。
+However, **do not retire your Kobo just yet.**
 
-**解決策**: PC からスクリプトを SSH/SCP で Kobo に転送し、Kobo 上で HTTP サーバーを起動。Firefox で `http://localhost:8080/` を開いて表示する（60 秒ごとに自動更新）。
+The sluggish performance you experience is not a failure of the hardware itself, but a mismatch between a lightweight device and a "heavyweight" web. By shifting your perspective from "a general-purpose computer" to a **"dedicated appliance,"** you can turn your Kobo into a highly functional, specialized tool.
 
-## 実行環境
+#### The "Single-Task" Philosophy
 
-Kobo タブレットの改造手順は[こちら](https://sites.google.com/site/gibekm/hardware/kobo/kobo-as-tablet)を参照。
+Instead of struggling to browse the modern internet, why not assign your Kobo to a single, specific mission? By limiting its scope, the device becomes snappy, reliable, and incredibly useful once again:
 
-## セットアップ
+* **Digital Photo Frame:** A beautiful, low-power display for your favorite memories.
+* **Kitchen Companion:** A dedicated interface for displaying your favorite recipes.
+* **Smart Home Controller:** A minimalist terminal to toggle lights or check sensors.
 
-`.env` ファイルをプロジェクトルートに作成（コミット禁止）:
+When you simplify its role, your Kobo ceases to be a slow browser and transforms into a **"Visible Appliance"**—an elegant, permanent fixture on your desk or in your living room.
+
+Don't let it gather dust in a drawer. Find a dedicated task for it, and let it shine once more.
+
+
+## Project Example: Kintetsu Bus Arrival Viewer
+
+To demonstrate the "Single-Task" philosophy, I have developed a custom tool to turn the Kobo into a dedicated **Kintetsu Bus Arrival Viewer**.
+
+#### The Problem
+
+The default browser on this Debian-based Kobo (running on an older environment like Ubuntu 13.04) struggles with modern web standards, particularly with TLS certificate validation. Accessing live transit information sites directly is often impossible or unbearably slow.
+
+#### The Solution: A Local Proxy Approach
+
+Instead of fighting the browser, this script acts as a bridge:
+
+1. **Data Fetching:** A Python script runs on the Kobo to fetch and parse the bus arrival data from the Kintetsu Bus official site.
+2. **Local Serving:** The script serves a simplified, lightweight HTML page via a local HTTP server (`localhost:8080`).
+3. **Visualization:** The Kobo's browser renders only the local, static-like page, avoiding the complexity of modern web scripts.
+4. **Automation:** The page automatically refreshes every 60 seconds, ensuring you always have up-to-date arrival times at a glance.
+
+---
+
+## Technical Details
+
+### Requirements
+
+**On your PC (deployment machine):**
+- Python 3.12+
+- [uv](https://github.com/astral-sh/uv) package manager
+- `ssh` / `scp` commands (OpenSSH client)
+- `gh` CLI (optional, for GitHub)
+
+**On the Kobo:**
+- Debian/Ubuntu environment with SSH server (Dropbear)
+- Python 2.7 or Python 3.x (standard library only — no pip required)
+- Firefox or another graphical browser
+
+### Setup
+
+1. Clone this repository on your PC:
+   ```bash
+   git clone https://github.com/MagariDIS/bus_statedtl.git
+   cd bus_statedtl
+   uv sync
+   ```
+
+2. Create a `.env` file in the project root (never commit this file):
+   ```
+   KOBO_IP=192.168.x.x
+   KOBO_ACCONT=your_username
+   KOBO_ACCONT_PASSWORD=your_password
+   ```
+
+3. Deploy and launch:
+   ```bash
+   uv run python main.py
+   ```
+
+### File Structure
 
 ```
-KOBO_IP=192.168.x.x
-KOBO_ACCONT=ユーザー名
-KOBO_ACCONT_PASSWORD=パスワード
+PC (this repo)                       Kobo (/home/<user>/python_apps/bus_statedtl/)
+├── main.py          ──SSH/SCP──►   ├── bus_fetch.py
+├── bus_fetch.py     ──SCP──────►   ├── bus_server.py
+├── bus_server.py    ──SCP──────►   └── config.yaml
+├── config.yaml
+├── .env             (local only, not committed)
+├── pyproject.toml
+└── uv.lock
 ```
 
-依存関係のインストール:
+### How It Works
 
-```bash
-uv sync
-```
+**`main.py`** (runs on your PC)
+- Reads `KOBO_IP`, `KOBO_ACCONT`, `KOBO_ACCONT_PASSWORD` from `.env`
+- Transfers `bus_fetch.py`, `bus_server.py`, and `config.yaml` to the Kobo via `scp`
+- Uses legacy SSH key exchange options (`diffie-hellman-group1-sha1`) to connect to the Kobo's old Dropbear SSH server
+- Stops any existing server process via `pkill`, then restarts `bus_server.py` in the background
+- Opens Firefox on the Kobo via `DISPLAY=:0.0 firefox http://localhost:8080/`
 
-## 使い方
+**`bus_server.py`** (runs on the Kobo)
+- Starts an HTTP server on port 8080
+- On each `GET /` or `GET /?page=N` request, fetches fresh data and returns a rendered HTML page
+- Supports multiple route groups defined in `config.yaml`, switchable via page navigation buttons
 
-```bash
-# Kobo に接続してサーバーを起動
-uv run python main.py
+**`bus_fetch.py`** (runs on the Kobo, also usable standalone)
+- Compatible with both Python 2.7 and Python 3.x
+- Skips TLS certificate validation via `ssl._create_unverified_context()` to work around the Kobo's outdated SSL stack
+- Retrieves the correct current time from the bus site's HTTP `Date` response header (compensates for the Kobo's inaccurate system clock)
+- Strips HTML tags and parses bus arrival entries using regex: `N | HH:MM 到着予定 STATUS ... 定刻：HH:MM (delay)`
+- Generates a grayscale-optimized card-style HTML layout suited for the Kobo's e-ink-like display
 
-# ローカルテスト（PC 上で HTML を生成して開く）
-uv run python bus_fetch.py config.yaml
-```
+### Route Configuration (`config.yaml`)
 
-`main.py` を実行すると以下が自動で行われる:
-1. `bus_fetch.py`・`bus_server.py`・`config.yaml` を Kobo へ転送
-2. Kobo 上で HTTP サーバーをポート 8080 で起動
-3. Kobo の Firefox で `http://localhost:8080/` を開く
-
-## 路線の設定
-
-`config.yaml` を編集して路線を追加・削除する。複数 `page` を定義するとページ切り替えボタンが表示される。
+Define as many pages and routes as you need. The `YYYYMMDDHHMM` placeholder in each URL is replaced at runtime with the current time.
 
 ```yaml
 pages:
-  - page: "藤の里住宅前"
+  - page: "Page label shown in nav button"
     routes:
-      - label: "近鉄八尾駅前行"
+      - label: "Route A"
         url: "https://kintetsu-bus.jorudan.biz/busstatedtl?...&dt=YYYYMMDDHHMM&..."
-      - label: "藤井寺駅行"
+      - label: "Route B"
         url: "https://kintetsu-bus.jorudan.biz/busstatedtl?...&dt=YYYYMMDDHHMM&..."
-  - page: "八尾→藤井寺"
+  - page: "Another stop"
     routes:
-      - label: "八尾南駅前発"
+      - label: "Route C"
         url: "https://kintetsu-bus.jorudan.biz/busstatedtl?...&dt=YYYYMMDDHHMM&..."
 ```
 
-URL 内の `YYYYMMDDHHMM` は実行時に現在時刻で自動置換される。
+To find the correct URL for a stop, visit the [Kintetsu Bus arrival info site](https://kintetsu-bus.jorudan.biz/), navigate to your stop, and copy the URL from your browser's address bar. Replace the timestamp portion with `YYYYMMDDHHMM`.
 
-## 情報ソースの例（バスサイト）
+### Local Testing (without a Kobo)
 
-### ＪＲ八尾駅前
-- [近鉄八尾駅前行](https://kintetsu-bus.jorudan.biz/busstatedtl?mode=4&fr=%E8%97%A4%E3%81%AE%E9%87%8C%E4%BD%8F%E5%AE%85%E5%89%8D&frsk=B&tosk=&dt=202606270747&dgmpl=%E8%97%A4%E3%81%AE%E9%87%8C%E4%BD%8F%E5%AE%85%E5%89%8D%E3%80%94%E8%BF%91%E9%89%84%E3%83%90%E3%82%B9%E3%80%95%3A1%3A1&p=0%2C14%2C15)
-- [藤井寺駅行](https://kintetsu-bus.jorudan.biz/busstatedtl?mode=4&fr=%E8%97%A4%E3%81%AE%E9%87%8C%E4%BD%8F%E5%AE%85%E5%89%8D&frsk=B&tosk=&dt=202606270747&dgmpl=%E8%97%A4%E3%81%AE%E9%87%8C%E4%BD%8F%E5%AE%85%E5%89%8D%E3%80%94%E8%BF%91%E9%89%84%E3%83%90%E3%82%B9%E3%80%95%3A2&p=0%2C14%2C15%2C16)
+You can run `bus_fetch.py` directly on your PC to verify parsing and HTML output:
 
-### 八尾→藤井寺
-- [八尾南駅前発](https://kintetsu-bus.jorudan.biz/busstatedtl?mode=4&fr=%E5%85%AB%E5%B0%BE%E5%8D%97%E9%A7%85%E5%89%8D&frsk=B&tosk=&dt=202606271038&dgmpl=%E5%85%AB%E5%B0%BE%E5%8D%97%E9%A7%85%E5%89%8D%E3%80%94%E8%BF%91%E9%89%84%E3%83%90%E3%82%B9%E3%80%95%3A3%3A1&p=0%2C14%2C15)
-- [近鉄八尾駅前発](https://kintetsu-bus.jorudan.biz/busstatedtl?mode=4&fr=%E8%BF%91%E9%89%84%E5%85%AB%E5%B0%BE%E9%A7%85%E5%89%8D&frsk=B&tosk=&dt=202606271039&dgmpl=%E8%BF%91%E9%89%84%E5%85%AB%E5%B0%BE%E9%A7%85%E5%89%8D%E3%80%94%E8%BF%91%E9%89%84%E3%83%90%E3%82%B9%E3%80%95%3A4%3A1&p=0%2C14%2C15)
+```bash
+uv run python bus_fetch.py config.yaml
+# Output: /tmp/buses.html  (opened automatically in your browser)
+```
