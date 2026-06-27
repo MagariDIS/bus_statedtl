@@ -109,6 +109,13 @@ def main():
     remote_startup = f'{REMOTE_DIR}/{STARTUP_NAME}'
 
     print(f'接続先: {host_str}')
+
+    # PC の現在時刻を Kobo に同期
+    from datetime import datetime
+    now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    print(f'日時同期: {now}')
+    ssh_run(host_str, f'sudo date -s "{now}" 2>/dev/null || date -s "{now}"', env, check=False)
+
     ssh_run(host_str, f'mkdir -p {REMOTE_DIR}', env)
     scp_file(local_script, f'{host_str}:{remote_script}', env)
     scp_file(local_server, f'{host_str}:{remote_server}', env)
