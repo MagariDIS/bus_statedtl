@@ -74,6 +74,14 @@ Instead of fighting the browser, this script acts as a bridge:
    uv run python main.py
    ```
 
+4. **Restarting on the Kobo without a PC** — If the Kobo reboots, open a terminal on the Kobo and run:
+   ```bash
+   cd /home/marek/python_apps/bus_statedtl
+   python bus_server.py config.yaml 8080 &
+   DISPLAY=:0.0 firefox http://localhost:8080/ &
+   ```
+   The files are already in place from the last deployment, so no transfer is needed.
+
 ### File Structure
 
 ```
