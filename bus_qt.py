@@ -10,7 +10,9 @@ from datetime import datetime, timedelta
 INSTALL_DIR = '/home/marek/python_apps/bus_statedtl'
 CONFIG_PATH = sys.argv[1] if len(sys.argv) > 1 else INSTALL_DIR + '/config.yaml'
 REFRESH_SECS = 60
-TICK_SECS = 30   # カウントダウン更新間隔
+TICK_SECS = 30
+MAX_CARDS = 5   # 路線ごとの最大バス表示数（固定確保）
+MEM_TICK_INTERVAL = 5   # 何ティックに1回メモリを読むか
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)) or INSTALL_DIR)
 from bus_fetch import (
@@ -21,7 +23,7 @@ from bus_fetch import (
 from PySide.QtCore import Qt, QTimer, QThread, Signal
 from PySide.QtGui import (
     QApplication, QWidget, QVBoxLayout, QHBoxLayout,
-    QLabel, QPushButton, QFrame, QFont, QSizePolicy,
+    QLabel, QPushButton, QFrame, QFont,
 )
 
 
@@ -32,14 +34,16 @@ def _get_mem_info():
             proc = f.read()
         with open('/proc/meminfo') as f:
             minfo = f.read()
-        rss = re.search(r'VmRSS:\s+(\d+)', proc)
-        avail = re.search(r'MemAvailable:\s+(\d+)', minfo) or re.search(r'MemFree:\s+(\d+)', minfo)
+        rss   = re.search(r'VmRSS:\s+(\d+)', proc)
+        avail = (re.search(r'MemAvailable:\s+(\d+)', minfo)
+                 or re.search(r'MemFree:\s+(\d+)', minfo))
         total = re.search(r'MemTotal:\s+(\d+)', minfo)
         parts = []
         if rss:
             parts.append('App:%dMB' % (int(rss.group(1)) // 1024))
         if avail and total:
-            parts.append('Free:%d/%dMB' % (int(avail.group(1)) // 1024, int(total.group(1)) // 1024))
+            parts.append('Free:%d/%dMB' % (
+                int(avail.group(1)) // 1024, int(total.group(1)) // 1024))
         return ' | '.join(parts)
     except Exception:
         return ''
@@ -57,8 +61,7 @@ def _remaining_secs(arrival_str, now):
 
 
 class FetchThread(QThread):
-    """バックグラウンドでバスデータを取得するスレッド"""
-    data_ready = Signal(object, list)   # (server_time: datetime, route_results: list)
+    data_ready = Signal(object, list)
 
     def __init__(self, pages, page_idx):
         super(FetchThread, self).__init__()
@@ -81,82 +84,87 @@ class FetchThread(QThread):
 
 
 class BusCard(QFrame):
-    """1本分の接近情報カード"""
+    """ラベルを固定配置し、update_entry() でテキストのみ書き換えるカード"""
 
-    def __init__(self, entry, server_time, parent=None):
+    def __init__(self, parent=None):
         super(BusCard, self).__init__(parent)
         self.setFrameStyle(QFrame.Box | QFrame.Plain)
         self.setLineWidth(2)
-        self._secs = _remaining_secs(entry['arrival'], server_time)
-        self._urgency = -1   # 前回の緊急度レベル（変化時のみ再描画）
+        self._secs = None
+        self._urgency = -1
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(8, 6, 8, 6)
         layout.setSpacing(2)
 
-        # 番号・到着時刻・状態
         row1 = QHBoxLayout()
-        lbl_num = QLabel(entry['num'] + '.')
-        lbl_num.setFont(QFont('sans-serif', 11, QFont.Bold))
-        lbl_arr = QLabel(entry['arrival'])
-        lbl_arr.setFont(QFont('sans-serif', 20, QFont.Bold))
-        lbl_sta = QLabel(entry['status'])
-        lbl_sta.setFont(QFont('sans-serif', 14, QFont.Bold))
-        row1.addWidget(lbl_num)
-        row1.addWidget(lbl_arr)
-        row1.addWidget(lbl_sta)
+        self._lbl_num = QLabel('')
+        self._lbl_num.setFont(QFont('sans-serif', 11, QFont.Bold))
+        self._lbl_arr = QLabel('')
+        self._lbl_arr.setFont(QFont('sans-serif', 20, QFont.Bold))
+        self._lbl_sta = QLabel('')
+        self._lbl_sta.setFont(QFont('sans-serif', 14, QFont.Bold))
+        row1.addWidget(self._lbl_num)
+        row1.addWidget(self._lbl_arr)
+        row1.addWidget(self._lbl_sta)
         row1.addStretch()
         layout.addLayout(row1)
 
-        # カウントダウン
         self._lbl_cd = QLabel('')
         self._lbl_cd.setAlignment(Qt.AlignCenter)
         layout.addWidget(self._lbl_cd)
 
-        # 定刻・遅延
-        delay = ('! ' + entry['delay']) if '遅れ' in entry['delay'] else entry['delay']
-        lbl_detail = QLabel('定刻 %s (%s)' % (entry['scheduled'], delay))
-        lbl_detail.setFont(QFont('sans-serif', 10))
-        layout.addWidget(lbl_detail)
+        self._lbl_detail = QLabel('')
+        self._lbl_detail.setFont(QFont('sans-serif', 10))
+        layout.addWidget(self._lbl_detail)
 
-        self._update()
+    def update_entry(self, entry, server_time):
+        """新データでラベルを上書き（ウィジェット再生成なし）"""
+        self._secs = _remaining_secs(entry['arrival'], server_time)
+        self._urgency = -1  # スタイルを強制再適用
+
+        self._lbl_num.setText(entry['num'] + '.')
+        self._lbl_arr.setText(entry['arrival'])
+        self._lbl_sta.setText(entry['status'])
+        delay = ('! ' + entry['delay']) if '遅れ' in entry['delay'] else entry['delay']
+        self._lbl_detail.setText('定刻 %s (%s)' % (entry['scheduled'], delay))
+        self.setVisible(True)
+        self._redraw()
+
+    def clear(self):
+        self.setVisible(False)
+        self._secs = None
 
     def tick(self):
         if self._secs is not None and self._secs > 0:
             self._secs = max(0, self._secs - TICK_SECS)
-        self._update()
+        self._redraw()
 
     def _urgency_level(self, rem):
-        if rem is None:  return -1
-        if rem <= 0:     return 0
-        if rem < 60:     return 1
-        if rem < 120:    return 2
-        if rem < 300:    return 3
+        if rem is None: return -1
+        if rem <= 0:    return 0
+        if rem < 60:    return 1
+        if rem < 120:   return 2
+        if rem < 300:   return 3
         return 4
 
-    def _update(self):
+    def _redraw(self):
         rem = self._secs
         if rem is None:
             return
-        m, s = divmod(max(0, rem), 60)
 
         # テキスト更新（軽量・毎ティック）
-        if rem <= 0:
-            self._lbl_cd.setText('到着')
-        else:
-            self._lbl_cd.setText('%d分%02d秒' % (m, s))
+        m, s = divmod(max(0, rem), 60)
+        self._lbl_cd.setText('到着' if rem <= 0 else '%d分%02d秒' % (m, s))
 
-        # スタイル・フォント変更は緊急度が変わったときだけ（重い処理）
+        # スタイル・フォントは緊急度変化時のみ（重い処理）
         level = self._urgency_level(rem)
         if level == self._urgency:
             return
         self._urgency = level
 
-        if level == 0:
-            self._lbl_cd.setFont(QFont('sans-serif', 28, QFont.Bold))
-            self.setStyleSheet('QFrame{background:#000}QLabel{color:#fff}')
-        elif level == 1:
-            self._lbl_cd.setFont(QFont('sans-serif', 26, QFont.Bold))
+        if level <= 1:
+            self._lbl_cd.setFont(QFont('sans-serif', 26 if level == 1 else 28, QFont.Bold))
             self.setStyleSheet('QFrame{background:#000}QLabel{color:#fff}')
         elif level == 2:
             self._lbl_cd.setFont(QFont('sans-serif', 22, QFont.Bold))
@@ -169,13 +177,62 @@ class BusCard(QFrame):
             self.setStyleSheet('')
 
 
+class RouteColumn(QWidget):
+    """路線1列分。カードを固定枚数確保し show/hide で表示を切り替える"""
+
+    def __init__(self, parent=None):
+        super(RouteColumn, self).__init__(parent)
+        layout = QVBoxLayout(self)
+        layout.setSpacing(4)
+        layout.setContentsMargins(0, 0, 0, 0)
+
+        self._lbl_header = QLabel('')
+        self._lbl_header.setFont(QFont('sans-serif', 13, QFont.Bold))
+        self._lbl_header.setStyleSheet(
+            'padding:4px 6px;background:#ccc;border-left:6px solid #000'
+        )
+        layout.addWidget(self._lbl_header)
+
+        self._lbl_no_info = QLabel('（情報なし）')
+        self._lbl_no_info.setFont(QFont('sans-serif', 12))
+        self._lbl_no_info.setVisible(False)
+        layout.addWidget(self._lbl_no_info)
+
+        self._cards = []
+        for _ in range(MAX_CARDS):
+            card = BusCard()
+            card.setVisible(False)
+            layout.addWidget(card)
+            self._cards.append(card)
+
+        layout.addStretch()
+
+    def update_data(self, label, entries, now):
+        self._lbl_header.setText(label)
+        if entries:
+            self._lbl_no_info.setVisible(False)
+            for i, card in enumerate(self._cards):
+                if i < len(entries):
+                    card.update_entry(entries[i], now)
+                else:
+                    card.clear()
+        else:
+            self._lbl_no_info.setVisible(True)
+            for card in self._cards:
+                card.clear()
+
+    def active_cards(self):
+        return [c for c in self._cards if c.isVisible()]
+
+
 class MainWindow(QWidget):
     def __init__(self):
         super(MainWindow, self).__init__()
         self._pages = load_config(CONFIG_PATH)
         self._page_idx = 0
-        self._cards = []
         self._fetch_thread = None
+        self._tick_count = 0
+        self._route_cols = []
 
         self._setup_ui()
         self._setup_timers()
@@ -186,10 +243,10 @@ class MainWindow(QWidget):
         self.showFullScreen()
 
         self._root = QVBoxLayout(self)
-        self._root.setContentsMargins(34, 4, 4, 4)  # 左30px追加（画面見切れ対策）
+        self._root.setContentsMargins(34, 4, 4, 4)
         self._root.setSpacing(4)
 
-        # ヘッダー（タイトル＋ページ切り替えボタン）
+        # ヘッダー
         hdr = QHBoxLayout()
         title = QLabel('近鉄バス接近情報')
         title.setFont(QFont('sans-serif', 14, QFont.Bold))
@@ -200,11 +257,10 @@ class MainWindow(QWidget):
         for i, p in enumerate(self._pages):
             btn = QPushButton(p['page'])
             btn.setFont(QFont('sans-serif', 11, QFont.Bold))
-            btn.setMinimumSize(90, 40)   # タッチしやすいサイズ
+            btn.setMinimumSize(90, 40)
             btn.clicked.connect(lambda checked=False, idx=i: self._switch_page(idx))
             hdr.addWidget(btn)
             self._nav_btns.append(btn)
-
         self._root.addLayout(hdr)
 
         sep = QFrame()
@@ -222,13 +278,26 @@ class MainWindow(QWidget):
         info_row.addWidget(self._lbl_mem)
         self._root.addLayout(info_row)
 
-        # コンテンツエリア（路線カラムを横並び）
+        # コンテンツエリア（ページ切り替え時のみ再構築）
         self._content_widget = QWidget()
         self._content_layout = QHBoxLayout(self._content_widget)
         self._content_layout.setSpacing(8)
         self._root.addWidget(self._content_widget, 1)
 
+        self._build_columns()
         self._update_nav_style()
+
+    def _build_columns(self):
+        """現在ページの路線数に合わせてカラムを構築（ページ切り替え時のみ呼ぶ）"""
+        while self._content_layout.count():
+            item = self._content_layout.takeAt(0)
+            if item.widget():
+                item.widget().setParent(None)
+        self._route_cols = []
+        for _ in self._pages[self._page_idx]['routes']:
+            col = RouteColumn()
+            self._content_layout.addWidget(col, 1)
+            self._route_cols.append(col)
 
     def _setup_timers(self):
         self._tick_timer = QTimer(self)
@@ -242,6 +311,7 @@ class MainWindow(QWidget):
     def _switch_page(self, idx):
         self._page_idx = idx
         self._update_nav_style()
+        self._build_columns()
         self._fetch()
 
     def _update_nav_style(self):
@@ -260,6 +330,10 @@ class MainWindow(QWidget):
     def _fetch(self):
         if self._fetch_thread and self._fetch_thread.isRunning():
             return
+        # 前回スレッドを明示的に後片付け
+        if self._fetch_thread:
+            self._fetch_thread.quit()
+            self._fetch_thread.wait()
         self._fetch_thread = FetchThread(self._pages, self._page_idx)
         self._fetch_thread.data_ready.connect(self._on_data)
         self._fetch_thread.start()
@@ -267,44 +341,16 @@ class MainWindow(QWidget):
     def _on_data(self, now, route_results):
         self._lbl_time.setText('取得: ' + now.strftime('%Y-%m-%d %H:%M'))
         self._lbl_mem.setText(_get_mem_info())
-        self._cards = []
-
-        # コンテンツをクリア
-        while self._content_layout.count():
-            item = self._content_layout.takeAt(0)
-            if item.widget():
-                item.widget().deleteLater()
-
-        for label, entries in route_results:
-            col_widget = QWidget()
-            col = QVBoxLayout(col_widget)
-            col.setSpacing(4)
-            col.setContentsMargins(0, 0, 0, 0)
-
-            lbl = QLabel(label)
-            lbl.setFont(QFont('sans-serif', 13, QFont.Bold))
-            lbl.setStyleSheet(
-                'padding:4px 6px;background:#ccc;border-left:6px solid #000'
-            )
-            col.addWidget(lbl)
-
-            if entries:
-                for entry in entries:
-                    card = BusCard(entry, now)
-                    col.addWidget(card)
-                    self._cards.append(card)
-            else:
-                no_info = QLabel('（情報なし）')
-                no_info.setFont(QFont('sans-serif', 12))
-                col.addWidget(no_info)
-
-            col.addStretch()
-            self._content_layout.addWidget(col_widget, 1)
+        for col, (label, entries) in zip(self._route_cols, route_results):
+            col.update_data(label, entries, now)
 
     def _tick(self):
-        for card in self._cards:
-            card.tick()
-        self._lbl_mem.setText(_get_mem_info())
+        for col in self._route_cols:
+            for card in col.active_cards():
+                card.tick()
+        self._tick_count += 1
+        if self._tick_count % MEM_TICK_INTERVAL == 0:
+            self._lbl_mem.setText(_get_mem_info())
 
 
 def main():
