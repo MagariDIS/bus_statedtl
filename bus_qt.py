@@ -10,7 +10,7 @@ from datetime import datetime, timedelta
 INSTALL_DIR = '/home/marek/python_apps/bus_statedtl'
 CONFIG_PATH = sys.argv[1] if len(sys.argv) > 1 else INSTALL_DIR + '/config.yaml'
 REFRESH_SECS = 60
-TICK_SECS = 30   # カウントダウン更新間隔（毎秒更新はKoboに重すぎるため）
+TICK_SECS = 15   # カウントダウン更新間隔（フリーズ相関テスト中）
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)) or INSTALL_DIR)
 from bus_fetch import (
@@ -174,7 +174,7 @@ class MainWindow(QWidget):
         self.showFullScreen()
 
         self._root = QVBoxLayout(self)
-        self._root.setContentsMargins(4, 4, 4, 4)
+        self._root.setContentsMargins(34, 4, 4, 4)  # 左30px追加（画面見切れ対策）
         self._root.setSpacing(4)
 
         # ヘッダー（タイトル＋ページ切り替えボタン）
