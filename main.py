@@ -124,10 +124,10 @@ def main():
     scp_file(local_startup, f'{host_str}:{remote_startup}', env)
     ssh_run(host_str, f'chmod +x {remote_startup}', env)
 
-    # ~/.xinitrc に startup.sh を登録（X セッション起動時に自動実行・冪等）
+    # ~/.xinitrc から startup.sh の行を削除（残留エントリのクリーンアップ）
     ssh_run(host_str,
-        f'grep -qF "{remote_startup}" ~/.xinitrc 2>/dev/null'
-        f' || echo "{remote_startup} &" >> ~/.xinitrc',
+        f'grep -v "startup.sh" ~/.xinitrc > /tmp/xrc_new 2>/dev/null'
+        f' && mv /tmp/xrc_new ~/.xinitrc',
         env, check=False)
 
     # startup.sh 経由でサーバー起動・Firefox 表示
