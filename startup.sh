@@ -10,19 +10,16 @@ else
     PYTHON=python2
 fi
 
-# 既存プロセスを停止（不要なタブを残さないよう Firefox も終了）
+# 既存プロセスを停止
+pkill -f "$PYTHON.*bus_qt.py" 2>/dev/null
 pkill -f "$PYTHON.*bus_server.py" 2>/dev/null
 pkill firefox 2>/dev/null
 sleep 1
-
-# サーバーをバックグラウンドで起動
-$PYTHON "$DIR/bus_server.py" "$DIR/config.yaml" 8080 \
-    </dev/null >/tmp/bus_server.log 2>&1 &
 
 # スクリーンセーバー・DPMS を無効化（自動スタンバイ防止）
 DISPLAY=:0.0 xset s off
 DISPLAY=:0.0 xset -dpms
 
-# Firefox を起動
-sleep 2
-DISPLAY=:0.0 firefox http://localhost:8080/ &
+# Qt アプリを起動
+DISPLAY=:0.0 $PYTHON "$DIR/bus_qt.py" "$DIR/config.yaml" \
+    </dev/null >/tmp/bus_qt.log 2>&1 &

@@ -9,6 +9,7 @@ load_dotenv()
 REMOTE_DIR = '/home/marek/python_apps/bus_statedtl'
 SCRIPT_NAME = 'bus_fetch.py'
 SERVER_NAME = 'bus_server.py'
+QT_NAME = 'bus_qt.py'
 CONFIG_NAME = 'config.yaml'
 SERVER_PORT = 8080
 STARTUP_NAME = 'startup.sh'
@@ -98,10 +99,12 @@ def main():
 
     local_script = os.path.join(BASE_DIR, SCRIPT_NAME)
     local_server = os.path.join(BASE_DIR, SERVER_NAME)
+    local_qt = os.path.join(BASE_DIR, QT_NAME)
     local_config = os.path.join(BASE_DIR, CONFIG_NAME)
     local_startup = os.path.join(BASE_DIR, STARTUP_NAME)
     remote_script = f'{REMOTE_DIR}/{SCRIPT_NAME}'
     remote_server = f'{REMOTE_DIR}/{SERVER_NAME}'
+    remote_qt = f'{REMOTE_DIR}/{QT_NAME}'
     remote_config = f'{REMOTE_DIR}/{CONFIG_NAME}'
     remote_startup = f'{REMOTE_DIR}/{STARTUP_NAME}'
 
@@ -109,6 +112,7 @@ def main():
     ssh_run(host_str, f'mkdir -p {REMOTE_DIR}', env)
     scp_file(local_script, f'{host_str}:{remote_script}', env)
     scp_file(local_server, f'{host_str}:{remote_server}', env)
+    scp_file(local_qt, f'{host_str}:{remote_qt}', env)
     scp_file(local_config, f'{host_str}:{remote_config}', env)
     scp_file(local_startup, f'{host_str}:{remote_startup}', env)
     ssh_run(host_str, f'chmod +x {remote_startup}', env)
