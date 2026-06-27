@@ -1,4 +1,4 @@
-# Re-purposing your Kobo: Beyond a Web Browser
+# Re-purposing your Kobo: Beyond a E-Reader 
 
 If you are feeling disappointed by the performance of your Kobo when browsing the modern web, you are not alone. The current web ecosystem—with its heavy JavaScript, massive advertising scripts, and high memory requirements—often overwhelms the limited hardware of older devices.
 
@@ -22,6 +22,8 @@ Don't let it gather dust in a drawer. Find a dedicated task for it, and let it s
 ## Project Example: Kintetsu Bus Arrival Viewer
 
 To demonstrate the "Single-Task" philosophy, I have developed a custom tool to turn the Kobo into a dedicated **Kintetsu Bus Arrival Viewer**.
+
+![Screenshot](./Screenshot.png)
 
 #### The Problem
 
