@@ -9,7 +9,8 @@ load_dotenv()
 REMOTE_DIR = '/home/marek/python_apps/bus_statedtl'
 SCRIPT_NAME = 'bus_fetch.py'
 SERVER_NAME = 'bus_server.py'
-QT_NAME = 'bus_qt.py'
+QT_NAME     = 'bus_qt.py'
+PUSH_NAME   = 'bus_push.py'
 CONFIG_NAME = 'config.yaml'
 SERVER_PORT = 8080
 STARTUP_NAME = 'startup.sh'
@@ -97,15 +98,15 @@ def main():
     host_str = f'{user}@{host}'
     env = make_env(password)
 
-    local_script = os.path.join(BASE_DIR, SCRIPT_NAME)
-    local_server = os.path.join(BASE_DIR, SERVER_NAME)
-    local_qt = os.path.join(BASE_DIR, QT_NAME)
-    local_config = os.path.join(BASE_DIR, CONFIG_NAME)
+    local_script  = os.path.join(BASE_DIR, SCRIPT_NAME)
+    local_server  = os.path.join(BASE_DIR, SERVER_NAME)
+    local_qt      = os.path.join(BASE_DIR, QT_NAME)
+    local_config  = os.path.join(BASE_DIR, CONFIG_NAME)
     local_startup = os.path.join(BASE_DIR, STARTUP_NAME)
-    remote_script = f'{REMOTE_DIR}/{SCRIPT_NAME}'
-    remote_server = f'{REMOTE_DIR}/{SERVER_NAME}'
-    remote_qt = f'{REMOTE_DIR}/{QT_NAME}'
-    remote_config = f'{REMOTE_DIR}/{CONFIG_NAME}'
+    remote_script  = f'{REMOTE_DIR}/{SCRIPT_NAME}'
+    remote_server  = f'{REMOTE_DIR}/{SERVER_NAME}'
+    remote_qt      = f'{REMOTE_DIR}/{QT_NAME}'
+    remote_config  = f'{REMOTE_DIR}/{CONFIG_NAME}'
     remote_startup = f'{REMOTE_DIR}/{STARTUP_NAME}'
 
     print(f'接続先: {host_str}')
@@ -130,11 +131,14 @@ def main():
         f' && mv /tmp/xrc_new ~/.xinitrc',
         env, check=False)
 
-    # startup.sh 経由でサーバー起動・Firefox 表示
+    # startup.sh 経由で Qt アプリ起動
     ssh_run(host_str, f'bash {remote_startup}', env, check=False)
 
-    print(f'サーバー起動済み → http://{host}:{SERVER_PORT}/')
-    print('（60秒ごとに自動更新されます）')
+    # PC 側プッシュデーモンをバックグラウンドで起動
+    push_script = os.path.join(BASE_DIR, PUSH_NAME)
+    subprocess.Popen([sys.executable, push_script])
+    print(f'バスデータプッシュデーモン起動（{PUSH_NAME}）')
+    print('（60秒ごとにデータ取得 → Kobo へ SCP 転送）')
 
 
 if __name__ == '__main__':
