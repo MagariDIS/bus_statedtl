@@ -63,7 +63,7 @@ URL 内の `YYYYMMDDHHMM` は実行時に現在時刻で自動置換される。
 
 ## 情報ソースの例（バスサイト）
 
-### 藤の里住宅前
+### ＪＲ八尾駅前
 - [近鉄八尾駅前行](https://kintetsu-bus.jorudan.biz/busstatedtl?mode=4&fr=%E8%97%A4%E3%81%AE%E9%87%8C%E4%BD%8F%E5%AE%85%E5%89%8D&frsk=B&tosk=&dt=202606270747&dgmpl=%E8%97%A4%E3%81%AE%E9%87%8C%E4%BD%8F%E5%AE%85%E5%89%8D%E3%80%94%E8%BF%91%E9%89%84%E3%83%90%E3%82%B9%E3%80%95%3A1%3A1&p=0%2C14%2C15)
 - [藤井寺駅行](https://kintetsu-bus.jorudan.biz/busstatedtl?mode=4&fr=%E8%97%A4%E3%81%AE%E9%87%8C%E4%BD%8F%E5%AE%85%E5%89%8D&frsk=B&tosk=&dt=202606270747&dgmpl=%E8%97%A4%E3%81%AE%E9%87%8C%E4%BD%8F%E5%AE%85%E5%89%8D%E3%80%94%E8%BF%91%E9%89%84%E3%83%90%E3%82%B9%E3%80%95%3A2&p=0%2C14%2C15%2C16)
 
