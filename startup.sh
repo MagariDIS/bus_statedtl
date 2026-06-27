@@ -16,6 +16,12 @@ pkill -f "$PYTHON.*bus_server.py" 2>/dev/null
 pkill firefox 2>/dev/null
 sleep 1
 
+# ネットワーク安定化（eth0 DORMANT / 古いカーネルの TCP スタック対策）
+sudo sysctl -w net.ipv4.tcp_keepalive_time=60   2>/dev/null
+sudo sysctl -w net.ipv4.tcp_keepalive_intvl=10  2>/dev/null
+sudo sysctl -w net.ipv4.tcp_keepalive_probes=3  2>/dev/null
+sudo ip link set eth0 up                         2>/dev/null
+
 # スクリーンセーバー・DPMS を無効化（自動スタンバイ防止）
 DISPLAY=:0.0 xset s off
 DISPLAY=:0.0 xset -dpms
